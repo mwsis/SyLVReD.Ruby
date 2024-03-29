@@ -31,7 +31,6 @@
 .rvmrc
 .yardoc
 _yardoc
-Gemfile.lock
 
 InstalledFiles
 coverage
