@@ -7,7 +7,7 @@ GEM
       xqsr3 (~> 0.37, >= 0.37.3)
     pantheios-ruby (0.22.0.2)
     recls-ruby (2.12.0)
-    xqsr3 (0.38.2)
+    xqsr3 (0.39.1)
 
 PLATFORMS
   x86_64-darwin-20
@@ -17,7 +17,7 @@ DEPENDENCIES
   libclimate-ruby
   pantheios-ruby
   recls-ruby
-  xqsr3
+  xqsr3 (~> 0.39, >= 0.39.1)
 
 BUNDLED WITH
    2.4.22

@@ -6,7 +6,7 @@
 # Purpose:  Lists all files that are the same size
 #
 # Created:  28th March 2024
-# Updated:  29th March 2024
+# Updated:  30th March 2024
 #
 # Home:     https://github.com/synesissoftware/SyLVReD.Ruby
 #
@@ -23,6 +23,7 @@ require 'sylvred'
 
 require 'libclimate'
 require 'recls'
+require 'xqsr3/extensions/integer'
 require 'xqsr3/extensions/kernel/integer'
 
 
@@ -126,9 +127,9 @@ entries.each do |size, entries|
 end
 
 
-num_files_matched = num_files_matched.to_s.chars.to_a.reverse.each_slice(3).map(&:join).join(',').reverse
-num_potential_duplicates = num_potential_duplicates.to_s.chars.to_a.reverse.each_slice(3).map(&:join).join(',').reverse
-total_potential_saving = total_potential_saving.to_s.chars.to_a.reverse.each_slice(3).map(&:join).join(',').reverse
+num_files_matched = num_files_matched.to_s_grp(3)
+num_potential_duplicates = num_potential_duplicates.to_s_grp(3)
+total_potential_saving = total_potential_saving.to_s_grp(3)
 
 puts "\t#{num_files_matched} file(s) matched; #{num_potential_duplicates} potential duplicate(s); potential saving of #{total_potential_saving} byte(s)"
 
