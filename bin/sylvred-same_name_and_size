@@ -1,7 +1,7 @@
 #! /usr/bin/env ruby
 
 # ######################################################################## #
-# File:     bin/sylvred-same_size.rb
+# File:     bin/sylvred-same_size
 #
 # Purpose:  Lists all files that have the same name and are the same size
 #
@@ -28,15 +28,15 @@ require 'xqsr3/extensions/kernel/integer'
 
 
 # ##########################################################
+# includes
+
+
+# ##########################################################
 # constants
 
 PROGRAM_VER_MAJOR   =   0
 PROGRAM_VER_MINOR   =   0
 PROGRAM_VER_PATCH   =   0
-
-
-# ##########################################################
-# includes
 
 
 # ##########################################################
@@ -85,7 +85,6 @@ directory_names = [ '.' ] if directory_names.empty?
 
 # ##########################################################
 # main()
-
 
 entries = Hash.new { |h, k| h[k] = Array.new }
 
