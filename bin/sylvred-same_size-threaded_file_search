@@ -1,0 +1,200 @@
+#! /usr/bin/env ruby
+
+# ######################################################################## #
+# File:     bin/sylvred-same_size-threaded_file_search
+#
+# Purpose:  Lists all files that are the same size, using multiple search
+#           threads
+#
+# Created:  30th March 2024
+# Updated:  30th March 2024
+#
+# Home:     https://github.com/synesissoftware/SyLVReD.Ruby
+#
+# Copyright (c) 2024, Synesis Information Systems
+# All rights reserved.
+#
+# ######################################################################## #
+
+
+# ##########################################################
+# requires
+
+require 'sylvred'
+
+require 'libclimate'
+require 'recls'
+require 'xqsr3/extensions/integer'
+require 'xqsr3/extensions/kernel/integer'
+
+
+# ##########################################################
+# includes
+
+
+# ##########################################################
+# constants
+
+PROGRAM_VER_MAJOR   =   0
+PROGRAM_VER_MINOR   =   0
+PROGRAM_VER_PATCH   =   0
+
+
+# ##########################################################
+# classes
+
+class ThreadSafeQueue
+
+  def initialize
+
+    @mx = Mutex.new
+    @queue = []
+  end
+
+  def push o
+
+    @mx.synchronize {
+      @queue << o
+    }
+  end
+
+  def pop n = 1
+
+    if n > 0
+
+      r =
+      @mx.synchronize {
+        @queue.pop(n)
+      }
+
+      r.nil? ? [] : r
+    else
+
+      nil
+    end
+  end
+end
+
+
+# ##########################################################
+# functions
+
+
+# ##########################################################
+# command-line handling
+
+options = {}
+climate = LibCLImate::Climate.new do |cl|
+
+  cl.add_option('--patterns', alias: '-p', help: "adds one or more search patterns, separated by '#{Recls::PATH_SEPARATOR}'. May be specified multiple times ") do |o, sp|
+
+    options[:patterns] ||= []
+    options[:patterns] += o.value.split(/[#{Recls::PATH_SEPARATOR}\|]/)
+  end
+
+  cl.add_flag('--verbose', alias: '-v', help: 'verbose operation') { options[:verbose] = true }
+
+  cl.info_lines = [
+
+      'SyLVRed.Ruby',
+      'Copyright Synesis Information Systems Pty Ltd (c) 2012-2024',
+      :version,
+      'lists files grouped by size, searching in multiple threads',
+      nil,
+  ]
+  cl.usage_values = '<directory-name-1> [ ... <directory-name-N> ]'
+  cl.constrain_values = 1.. ;
+  cl.value_names = [ 'directory-name-1' ]
+
+  trap 'INT' do
+
+    $stderr.puts ''
+
+    cl.abort 'processing cancelled ...', exit: 130
+  end
+end
+
+r = climate.run ARGV
+
+directory_names = r.values.dup
+directory_names = [ '.' ] if directory_names.empty?
+
+
+# ##########################################################
+# main()
+
+tsq = ThreadSafeQueue.new
+threads = []
+
+entries = Hash.new { |h, k| h[k] = Array.new }
+
+patterns = options[:patterns]
+
+num_files_matched         =   0
+num_potential_duplicates  =   0
+total_potential_saving    =   0
+
+
+directory_names.each do |directory_name|
+
+  thread_info = [ directory_name.dup, patterns ]
+
+  threads << Thread.new do
+
+    directory_name, patterns = thread_info
+
+    puts "searching in '#{directory_name}':"
+
+    Recls.file_rsearch(directory_name, patterns).each do |fe|
+
+      tsq.push fe
+    end
+  end
+end
+
+puts "waiting for all searches to complete ..." if options[:verbose]
+threads.each { |th| th.join }
+puts "processing results" if options[:verbose]
+
+loop do
+
+  ar = tsq.pop(50)
+
+  break if ar.empty?
+
+  ar.each do |fe|
+
+    num_files_matched += 1
+
+    entries[fe.size] << fe
+  end
+end
+
+entries.each do |size, entries|
+
+  if entries.size > 1
+
+    num_potential_duplicates += entries.size
+    total_potential_saving += (entries.size - 1) * size
+
+    if options[:verbose]
+
+      puts "#{size} :"
+      entries.each do |fe|
+
+        puts "\t#{fe.path}"
+      end
+    end
+  end
+end
+
+
+num_files_matched = num_files_matched.to_s_grp(3)
+num_potential_duplicates = num_potential_duplicates.to_s_grp(3)
+total_potential_saving = total_potential_saving.to_s_grp(3)
+
+puts "\t#{num_files_matched} file(s) matched; #{num_potential_duplicates} potential duplicate(s); potential saving of #{total_potential_saving} byte(s)"
+
+
+# ############################## end of file ############################# #
+
