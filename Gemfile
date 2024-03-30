@@ -2,6 +2,7 @@
 
 source "https://rubygems.org"
 
+gem 'comment_strip-ruby'
 gem 'clasp-ruby'
 gem 'libclimate-ruby'
 gem 'pantheios-ruby'

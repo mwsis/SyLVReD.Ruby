@@ -1,0 +1,152 @@
+#! /usr/bin/env ruby
+
+# ######################################################################## #
+# File:     bin/sylvred-same_ws_stripped
+#
+# Purpose:  Lists all text files that have the same contents when
+#           whitespace-stripped
+#
+# Created:  30th March 2024
+# Updated:  30th March 2024
+#
+# Home:     https://github.com/synesissoftware/SyLVReD.Ruby
+#
+# Copyright (c) 2024, Synesis Information Systems
+# All rights reserved.
+#
+# ######################################################################## #
+
+
+# ######################################################################## #
+# requires
+
+require 'sylvred'
+
+require 'libclimate'
+require 'recls'
+require 'xqsr3/extensions/integer'
+require 'xqsr3/extensions/kernel/integer'
+
+
+# ######################################################################## #
+# includes
+
+
+# ######################################################################## #
+# constants
+
+PROGRAM_VER_MAJOR   =   0
+PROGRAM_VER_MINOR   =   0
+PROGRAM_VER_PATCH   =   0
+
+
+# ######################################################################## #
+# functions
+
+
+# ######################################################################## #
+# command-line handling
+
+options = {}
+climate = LibCLImate::Climate.new do |cl|
+
+  cl.add_option('--patterns', alias: '-p', help: "adds one or more search patterns, separated by '#{Recls::PATH_SEPARATOR}'. May be specified multiple times ") do |o, sp|
+
+    options[:patterns] ||= []
+    options[:patterns] += o.value.split(/[#{Recls::PATH_SEPARATOR}\|]/)
+  end
+
+  cl.add_flag('--verbose', alias: '-v', help: 'verbose operation') { options[:verbose] = true }
+
+  cl.info_lines = [
+
+      'SyLVRed.Ruby',
+      'Copyright Synesis Information Systems Pty Ltd (c) 2012-2024',
+      :version,
+      'lists files that have same contents when whitespace-stripped',
+      nil,
+  ]
+  cl.usage_values = '<directory-name-1> [ ... <directory-name-N> ]'
+  cl.constrain_values = 1.. ;
+  cl.value_names = [ 'directory-name-1' ]
+
+  trap 'INT' do
+
+    $stderr.puts ''
+
+    cl.abort 'processing cancelled ...', exit: 130
+  end
+end
+
+r = climate.run ARGV
+
+directory_names = r.values.dup
+directory_names = [ '.' ] if directory_names.empty?
+
+
+# ######################################################################## #
+# main
+
+entries = Hash.new { |h, k| h[k] = Array.new }
+
+patterns = options[:patterns]
+
+num_files_matched         =   0
+num_potential_duplicates  =   0
+total_potential_saving    =   0
+
+
+directory_names.each do |directory_name|
+
+  puts "searching in '#{directory_name}':"
+
+  Recls.file_rsearch(directory_name, patterns).each do |fe|
+
+    begin
+
+
+      num_files_matched += 1
+
+      lines = IO.readlines fe.path
+      lines = lines.map(&:chomp)
+      lines = lines.map(&:strip)
+      lines = lines.reject(&:empty?)
+
+
+      entries[lines.join("|")] << fe
+    rescue ArgumentError => x
+
+      $stderr.puts "#{fe.path}: #{x}"
+    end
+  end
+end
+
+
+entries.each do |ws_stripped_contents, entries|
+
+  if entries.size > 1
+
+    num_potential_duplicates += entries.size
+    entries[1..].each { |fe| total_potential_saving += fe.size }
+
+    if options[:verbose]
+
+      puts "entries (with #{ws_stripped_contents.size} line(s)):"
+      entries.each do |fe|
+
+        puts "\t#{fe.path} #{fe.size}"
+      end
+    end
+  end
+end
+
+
+num_files_matched = num_files_matched.to_s_grp(3)
+num_potential_duplicates = num_potential_duplicates.to_s_grp(3)
+total_potential_saving = total_potential_saving.to_s_grp(3)
+
+puts "\t#{num_files_matched} file(s) matched; #{num_potential_duplicates} potential duplicate(s); potential saving of #{total_potential_saving} byte(s)"
+
+
+# ############################## end of file ############################# #
+
