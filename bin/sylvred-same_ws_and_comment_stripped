@@ -3,15 +3,16 @@
 # ######################################################################## #
 # File:     bin/sylvred-same_ws_and_comment_stripped
 #
-# Purpose:  COMPLETE_ME
+# Purpose:  Lists all files that are the same contents after stripping
+#           whitespace and comments
 #
 # Created:  30th March 2024
 # Updated:  31st March 2024
 #
-# Author:   Matthew Wilson
+# Home:     https://github.com/synesissoftware/SyLVReD.Ruby
 #
-# Copyright (c) Matthew Wilson, COMPLETE_ME
-# All rights reserved
+# Copyright (c) 2024, Synesis Information Systems
+# All rights reserved.
 #
 # ######################################################################## #
 
