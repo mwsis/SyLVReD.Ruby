@@ -2,7 +2,7 @@ GEM
   remote: https://rubygems.org/
   specs:
     clasp-ruby (0.23.0.2)
-    comment_strip-ruby (0.1.2.1)
+    comment_strip-ruby (0.2.0)
       xqsr3 (~> 0.38)
     libclimate-ruby (0.16.0.1)
       clasp-ruby (~> 0.23)
@@ -16,7 +16,7 @@ PLATFORMS
 
 DEPENDENCIES
   clasp-ruby
-  comment_strip-ruby
+  comment_strip-ruby (~> 0.2)
   libclimate-ruby
   pantheios-ruby
   recls-ruby

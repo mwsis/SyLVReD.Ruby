@@ -6,7 +6,7 @@
 # Purpose:  COMPLETE_ME
 #
 # Created:  30th March 2024
-# Updated:  30th March 2024
+# Updated:  31st March 2024
 #
 # Author:   Matthew Wilson
 #
@@ -20,6 +20,7 @@
 # requires
 
 require 'sylvred'
+require 'sylvred/util'
 
 require 'comment_strip'
 require 'libclimate'
@@ -31,12 +32,14 @@ require 'xqsr3/extensions/kernel/integer'
 # ######################################################################## #
 # includes
 
+include SyLVReD::Util
+
 
 # ######################################################################## #
 # constants
 
 PROGRAM_VER_MAJOR   =   0
-PROGRAM_VER_MINOR   =   0
+PROGRAM_VER_MINOR   =   1
 PROGRAM_VER_PATCH   =   0
 
 
@@ -109,8 +112,27 @@ directory_names.each do |directory_name|
       num_files_matched += 1
 
       raw = IO.read(fe.path)
-      stripped = CommentStrip.strip(raw, :C)
-      lines = stripped.split(/\n/)
+
+      contents =
+      if (lnf = language_and_family_from_extension(fe.extension))
+
+        case lnf[0]
+        when :C
+
+          CommentStrip.strip(raw, :C)
+        when :hash_line
+
+          CommentStrip.strip(raw, :hash_line)
+        else
+
+          raw
+        end
+      else
+
+        raw
+      end
+
+      lines = contents.split(/\n/)
       lines = lines.map(&:chomp)
       lines = lines.map(&:strip)
       lines = lines.reject(&:empty?)
