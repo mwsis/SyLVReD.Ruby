@@ -1,0 +1,470 @@
+#! /usr/bin/env ruby
+
+# ######################################################################## #
+# File:     bin/sylvred-same_ws_and_comment_stripped-threaded
+#
+# Purpose:  Lists all files that are the same contents after stripping
+#           whitespace and comments, using multiple search threads
+#
+# Created:  31st March 2024
+# Updated:  1st April 2024
+#
+# Home:     https://github.com/synesissoftware/SyLVReD.Ruby
+#
+# Copyright (c) 2024, Synesis Information Systems
+# All rights reserved.
+#
+# ######################################################################## #
+
+
+# ######################################################################## #
+# requires
+
+require 'sylvred'
+require 'sylvred/util'
+
+require 'comment_strip'
+require 'libclimate'
+require 'recls'
+require 'xqsr3/extensions/integer'
+require 'xqsr3/extensions/kernel/integer'
+require 'xqsr3/extensions/string/map_option_string'
+
+
+# ######################################################################## #
+# includes
+
+include SyLVReD::Util
+
+
+# ######################################################################## #
+# constants
+
+PROGRAM_VER_MAJOR   =   0
+PROGRAM_VER_MINOR   =   0
+PROGRAM_VER_PATCH   =   0
+
+SEARCH_THREADING_OPTIONS = %w{
+
+  [g]iven_roots
+  root_sub[d]irectories
+  s[o]lo_thread
+  [s]ingle_threading
+}
+
+
+# ##########################################################
+# classes
+
+class ThreadSafeQueue
+
+  def initialize num_producers
+
+    @num_producers = num_producers
+    @mx = Mutex.new
+    @queue = []
+  end
+
+  def add_producer
+
+    @mx.synchronize do
+
+      @num_producers += 1
+    end
+  end
+
+  def del_producer
+
+    @mx.synchronize do
+
+      @num_producers -= 1
+    end
+  end
+
+  def push o
+
+    @mx.synchronize do
+
+      @queue << o
+    end
+  end
+
+  def pop n = 1
+
+    if n > 0
+
+      r, p =
+      @mx.synchronize do
+
+        [ @queue.pop(n), @num_producers ]
+      end
+
+      case r.size
+      when 0
+
+        0 == p ? nil : []
+      else
+
+        r
+      end
+    else
+
+      nil
+    end
+  end
+
+  def size
+
+    @mx.synchronize do
+
+      @queue.size
+    end
+  end
+end
+
+
+# ######################################################################## #
+# functions
+
+
+# ######################################################################## #
+# command-line handling
+
+options = {}
+climate = LibCLImate::Climate.new do |cl|
+
+  cl.add_option('--patterns', alias: '-p', help: "adds one or more search patterns, separated by '#{Recls::PATH_SEPARATOR}'. May be specified multiple times ") do |o, sp|
+
+    options[:patterns] ||= []
+    options[:patterns] += o.value.split(/[#{Recls::PATH_SEPARATOR}\|]/)
+  end
+  cl.add_option('--search-threading-model', alias: '-s', help: "specifies the search threading model", values: SEARCH_THREADING_OPTIONS) do |o, sp|
+
+    options[:search_threading_model] = o.value.map_option_string(SEARCH_THREADING_OPTIONS) or cl.abort "invalid search threading model '#{o.value}'; use --help for usage"
+  end
+
+  cl.add_flag('--verbose', alias: '-v', help: 'verbose operation') { options[:verbose] = true }
+
+  cl.info_lines = [
+
+      'SyLVRed.Ruby',
+      'Copyright Synesis Information Systems Pty Ltd (c) 2012-2024',
+      :version,
+      'lists files that have same contents when whitespace-stripped and comment-stripped',
+      nil,
+  ]
+  cl.usage_values = '<directory-name-1> [ ... <directory-name-N> ]'
+  cl.constrain_values = 1.. ;
+  cl.value_names = [ 'directory-name-1' ]
+
+  trap 'INT' do
+
+    $stderr.puts ''
+
+    cl.abort 'processing cancelled ...', exit: 130
+  end
+end
+
+r = climate.run ARGV
+
+directory_names = r.values.dup
+directory_names = [ '.' ] if directory_names.empty?
+
+patterns = options[:patterns]
+
+options[:search_threading_model] ||= :given_roots
+
+
+# ######################################################################## #
+# main
+
+tsq_entries = ThreadSafeQueue.new 0
+tsq_contents = ThreadSafeQueue.new 0
+threads = []
+
+# S1
+
+case options[:search_threading_model]
+when :given_roots
+
+  directory_names.each do |directory_name|
+
+    subdir_name = directory_name.dup
+
+    threads << Thread.new do
+
+      puts "searching in '#{subdir_name}' for #{patterns}:" if options[:verbose]
+
+      begin
+
+        tsq_entries.add_producer
+
+        Recls.file_rsearch(subdir_name, patterns).each do |fe|
+
+          tsq_entries.push fe
+        end
+
+        puts "completed search in '#{subdir_name}'" if options[:verbose]
+      ensure
+
+        tsq_entries.del_producer
+      end
+    end
+  end
+when :root_subdirectories
+
+  directory_names.each do |directory_name|
+
+    # file-search algorithm:
+    #
+    # F1. non-recursive search for files matching patterns within directory;
+    # F2. non-recursive search for sub-directories under directory; and then
+    # F3. recursive search for patterns in each sub-directory in a separate
+    #     thread
+
+
+    # F1
+
+    Recls.file_search(directory_name, patterns, Recls::FILES).each do |fe|
+
+      tsq_entries.push fe
+    end
+
+
+    # F2
+
+    Recls.file_search(directory_name, nil, Recls::DIRECTORIES).each do |de|
+
+      subdir_name = de.path
+
+      # F3
+
+      threads << Thread.new do
+
+        puts "searching in '#{subdir_name}' for #{patterns}:" if options[:verbose]
+
+        begin
+
+          tsq_entries.add_producer
+
+          Recls.file_rsearch(subdir_name, patterns).each do |fe|
+
+            tsq_entries.push fe
+          end
+
+          puts "completed search in '#{subdir_name}'" if options[:verbose]
+        ensure
+
+          tsq_entries.del_producer
+        end
+      end
+    end
+  end
+when :solo_thread
+
+  threads << Thread.new do
+
+    begin
+
+      tsq_entries.add_producer
+
+      directory_names.each do |directory_name|
+
+        subdir_name = directory_name
+
+        puts "searching in '#{subdir_name}' for #{patterns}:" if options[:verbose]
+
+        Recls.file_rsearch(subdir_name, patterns).each do |fe|
+
+          tsq_entries.push fe
+        end
+
+        puts "completed search in '#{subdir_name}'" if options[:verbose]
+      end
+    ensure
+
+      tsq_entries.del_producer
+    end
+  end
+when :single_threading
+
+  begin
+
+    tsq_entries.add_producer
+
+    directory_names.each do |directory_name|
+
+      subdir_name = directory_name
+
+      puts "searching in '#{subdir_name}' for #{patterns}:" if options[:verbose]
+
+      Recls.file_rsearch(subdir_name, patterns).each do |fe|
+
+        tsq_entries.push fe
+      end
+
+      puts "completed search in '#{subdir_name}'" if options[:verbose]
+    end
+  ensure
+
+    tsq_entries.del_producer
+  end
+else
+
+  climate.abort "invalid search threading model '#{options[:search_threading_model]}'"
+end
+
+# Three type of threads:
+#
+# S1. directory search, which push Recls::Entry instances onto a single
+#     ThreadSafeQueue instance;
+# S2. content canonicalisation, which pull off entries and performs
+#     requisite canonicalisation;
+# S3. (main thread)
+
+
+# S2
+
+(0...8).each do |n|
+
+  threads << Thread.new do
+
+    tsq_contents.add_producer
+
+    begin
+
+      loop do
+
+        ar = tsq_entries.pop
+
+        if ar.nil?
+
+          $stderr.puts "no more entries"
+
+          break
+        end
+
+        if 0 == ar.size
+
+          sleep 10
+        else
+
+          begin
+
+            fe = ar[0]
+
+            raw = IO.read(fe.path)
+
+            contents =
+            if (lnf = language_and_family_from_extension(fe.extension))
+
+              case lnf[0]
+              when :C
+
+                CommentStrip.strip(raw, :C)
+              when :hash_line
+
+                CommentStrip.strip(raw, :hash_line)
+              else
+
+                raw
+              end
+            else
+
+              raw
+            end
+
+            lines = contents.split(/\n/)
+            lines = lines.map(&:chomp)
+            lines = lines.map(&:strip)
+            lines = lines.reject(&:empty?)
+
+            tsq_contents.push [ lines.join("|"), fe ]
+          rescue ArgumentError => x
+
+            $stderr.puts "#{fe.path}: #{x}"
+          end
+        end
+      end
+    ensure
+
+      tsq_contents.del_producer
+    end
+  end
+end
+
+kill_stats = false
+stats_thread = Thread.new do
+
+  loop do
+
+    sleep 5
+
+    break if kill_stats
+
+    $stderr.puts "#{tsq_entries.size} entries, #{tsq_contents.size} contents"
+  end
+end
+
+
+puts "waiting for #{threads.size - 2} search(es) to complete ..." if options[:verbose]
+threads.each { |th| th.join }
+puts "processing #{tsq_contents.size} entries" if options[:verbose]
+
+kill_stats = true
+stats_thread.join
+
+entries = Hash.new { |h, k| h[k] = Array.new }
+
+num_files_matched         =   0
+num_potential_duplicates  =   0
+total_potential_saving    =   0
+
+
+loop do
+
+  ar = tsq_contents.pop 500
+
+  break if ar.nil?
+  break if ar.empty?
+
+  ar.each do |v|
+
+    contents = v[0]
+    fe = v[1]
+
+    num_files_matched += 1
+
+    entries[contents] << fe
+  end
+end
+
+
+entries.each do |ws_stripped_contents, entries|
+
+  if entries.size > 1
+
+    num_potential_duplicates += entries.size
+    entries[1..].each { |fe| total_potential_saving += fe.size }
+
+    if options[:verbose]
+
+      puts "entries (with #{ws_stripped_contents.size} line(s)):"
+      entries.each do |fe|
+
+        puts "\t#{fe.path} #{fe.size}"
+      end
+    end
+  end
+end
+
+
+num_files_matched = num_files_matched.to_s_grp(3)
+num_potential_duplicates = num_potential_duplicates.to_s_grp(3)
+total_potential_saving = total_potential_saving.to_s_grp(3)
+
+puts "\t#{num_files_matched} file(s) matched; #{num_potential_duplicates} potential duplicate(s); potential saving of #{total_potential_saving} byte(s)"
+
+
+# ############################## end of file ############################# #
+
