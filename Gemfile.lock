@@ -2,25 +2,27 @@ GEM
   remote: https://rubygems.org/
   specs:
     clasp-ruby (0.23.0.2)
+    cmpfs-ruby (0.2.3)
     comment_strip-ruby (0.2.0)
       xqsr3 (~> 0.38)
-    libclimate-ruby (0.16.0.1)
-      clasp-ruby (~> 0.23)
-      xqsr3 (~> 0.37, >= 0.37.3)
+    libclimate-ruby (0.17.0)
+      clasp-ruby (~> 0.23, >= 0.23.0.2)
+      xqsr3 (~> 0.39)
     pantheios-ruby (0.22.0.2)
-    recls-ruby (2.12.0)
-    xqsr3 (0.39.1)
+    recls-ruby (2.13.1)
+    xqsr3 (0.39.3)
 
 PLATFORMS
   x86_64-darwin-20
 
 DEPENDENCIES
-  clasp-ruby
+  clasp-ruby (~> 0.23)
+  cmpfs-ruby (~> 0.2, >= 0.2.3)
   comment_strip-ruby (~> 0.2)
   libclimate-ruby
   pantheios-ruby
   recls-ruby
-  xqsr3 (~> 0.39, >= 0.39.1)
+  xqsr3 (~> 0.39, >= 0.39.3)
 
 BUNDLED WITH
    2.4.22
